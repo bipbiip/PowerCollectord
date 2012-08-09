@@ -1,0 +1,72 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:       powercollector
+# Required-Start:  $network $remote_fs $syslog
+# Required-Stop:   $network $remote_fs $syslog
+# Default-Start:   2 3 4 5
+# Default-Stop:    0 1 6
+# Short-Description: Start PowerCollector daemon
+### END INIT INFO
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+
+. /lib/lsb/init-functions
+
+DAEMON=/usr/local/sbin/powercollectord
+PIDFILE=/var/run/powercollectord.pid
+
+test -x $DAEMON || exit 5
+
+if [ -r /etc/default/powercollect ]; then
+        . /etc/default/powercollect/
+fi
+
+
+LOCKFILE=/var/lock/powercollect
+
+lock_powercollect() {
+        if [ -x /usr/bin/lockfile-create ]; then
+                lockfile-create $LOCKFILE
+                lockfile-touch $LOCKFILE &
+                LOCKTOUCHPID="$!"
+        fi
+}
+
+unlock_powercollect() {
+        if [ -x /usr/bin/lockfile-create ] ; then
+                kill $LOCKTOUCHPID
+                lockfile-remove $LOCKFILE
+        fi
+}
+
+
+RUNASUSERGRP=edfd:edfd
+
+case $1 in
+        start)
+                log_daemon_msg "Starting power collector" "powercollectord"
+                lock_edf
+                start-stop-daemon --start --quiet --oknodo --background --make-pidfile --pidfile $PIDFILE --startas $DAEMON --chuid $RUNASUSERGRP
+                status=$?
+                unlock_edf
+                log_end_msg $status
+                ;;
+        stop)
+                log_daemon_msg "Stopping power collector" "powercollectord"
+                start-stop-daemon --stop --quiet --oknodo --pidfile $PIDFILE
+                log_end_msg $?
+                rm -f $PIDFILE
+                ;;
+        restart)
+                $0 stop && sleep 2 && $0 start
+                ;;
+        status)
+                status_of_proc $DAEMON "power collector"
+                ;;
+        *)
+                echo "Usage: $0 {start|stop|restart|status}"
+                exit 2
+                ;;
+esac
+
